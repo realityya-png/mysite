@@ -1,0 +1,111 @@
+<style>
+    #text-to-check {
+        width: 100%;
+        min-height: 150px;
+        padding: 10px;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+    #check-button {
+        padding: 10px 15px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    #results {
+        margin-top: 20px;
+        padding: 10px;
+        border: 1px solid #ffcc00;
+        background-color: #fffacd;
+        border-radius: 4px;
+        white-space: pre-wrap; /* Сохраняет форматирование */
+    }
+    .error-highlight {
+        color: red;
+        font-weight: bold;
+    }
+</style>
+
+<h2>Проверка орфографии (Русский язык)</h2>
+
+<textarea id="text-to-check" placeholder="Введите текст для проверки..."></textarea>
+<button id="check-button">Проверить текст</button>
+<div id="results">Здесь будут отображены ошибки.</div>
+
+<script>
+document.getElementById('check-button').addEventListener('click', function() {
+    const text = document.getElementById('text-to-check').value;
+    const resultsDiv = document.getElementById('results');
+    
+    // Проверяем, не пустой ли текст
+    if (text.trim() === '') {
+        resultsDiv.innerHTML = 'Пожалуйста, введите текст для проверки.';
+        return;
+    }
+    
+    resultsDiv.innerHTML = 'Проверка...';
+    
+    // URL для LanguageTool API (Public API - бесплатный с ограничениями)
+    const apiUrl = 'https://languagetool.org/api/v2/check';
+    
+    // Создаем параметры для POST-запроса
+    const params = new URLSearchParams();
+    params.append('text', text);
+    params.append('language', 'ru'); // Указываем русский язык
+    
+    fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params
+    })
+    .then(response => response.json())
+    .then(data => {
+        let outputText = text;
+        
+        if (data.matches && data.matches.length > 0) {
+            resultsDiv.innerHTML = `**Найдено ошибок: ${data.matches.length}**<br><br>`;
+            
+            // Выделение ошибок в тексте и отображение предложений
+            data.matches.reverse().forEach(match => {
+                const message = match.message;
+                const replacements = match.replacements.map(r => r.value).join(', ');
+                const errorText = text.substring(match.offset, match.offset + match.length);
+                
+                // Выделяем ошибку в исходном тексте для отображения
+                const highlightedError = `<span class="error-highlight" title="${message} (Предложения: ${replacements || 'Нет'})">${errorText}</span>`;
+                
+                // Заменяем оригинальное слово на выделенное в тексте
+                // Нужно работать с конца, чтобы offset-ы оставались верными
+                outputText = outputText.substring(0, match.offset) + highlightedError + outputText.substring(match.offset + match.length);
+            });
+            
+            // Выводим выделенный текст
+            resultsDiv.insertAdjacentHTML('beforeend', outputText);
+            
+            // Дополнительно выводим детали ошибок
+            resultsDiv.insertAdjacentHTML('beforeend', '<br><br>---<br>Детали ошибок:<br>');
+            data.matches.reverse().forEach(match => {
+                const errorText = text.substring(match.offset, match.offset + match.length);
+                const replacements = match.replacements.map(r => r.value).join(', ') || 'Нет';
+                resultsDiv.insertAdjacentHTML('beforeend', 
+                    `<p>Ошибка: **${errorText}**<br>
+                    Сообщение: ${match.message}<br>
+                    Предложения: ${replacements}</p>`);
+            });
+
+        } else {
+            resultsDiv.innerHTML = '**Ошибок не найдено!**';
+        }
+    })
+    .catch(error => {
+        resultsDiv.innerHTML = `Произошла ошибка при обращении к API: ${error.message}. <br>Возможно, вы превысили лимит запросов.`;
+        console.error('Error fetching data:', error);
+    });
+});
+</script>
